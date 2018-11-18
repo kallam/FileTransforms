@@ -1,5 +1,9 @@
+from typing import Any, Callable
+
+
 class ColumnMod:
-    def __init__(self, prefix=None, suffix=None, func=None):
+
+    def __init__(self, prefix=None, suffix=None, func: Callable[[Any], Any]=None):
         self.prefix = prefix
         self.suffix = suffix
         self.func = func

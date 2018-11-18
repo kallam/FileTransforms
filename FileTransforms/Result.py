@@ -3,7 +3,7 @@ import collections
 import os
 import csv
 from .FileType import FileType
-from .csv_utils import CSVWriter
+from .csv_utils import write_csv
 
 
 class BaseOutputFile:
@@ -28,31 +28,30 @@ class BaseOutputFile:
         self.data.append(r)
 
     def _write_csv(self):
-        with CSVWriter(self.file_path, **self.output_options) as w:
-            if self.headers is not None:
-                w.writerow(self.headers)
-            w.writerows(self.data)
+        data = self.data
+        if self.headers is not None:
+            data = [self.headers] + data
+        write_csv(self.file_path, data, **self.output_options)
 
     def _write_text(self):
         with open(self.file_path, 'w') as f:
             for r in self.data:
                 f.write(str(r) + '\n')
 
-    def write_to_file(self, folder_path: str = './'):
+    def write_to_file(self, folder_path: str = './') -> bool:
         if self.file_path == '':
             self.file_path = os.path.join(folder_path, self.filename)
 
         if not self.data and not self.headers:
-            return
+            return False
 
-        try:
-            if self.file_type in self.write_methods:
-                self.write_methods[self.file_type]()
+        if self.file_type in self.write_methods:
+            self.write_methods[self.file_type]()
+            return True
 
-        except Exception as e:
-            print('write_to_file:', e)
+        return False
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return 'filename: {}, file_path: {}, file_type: {}, len(data): {}'.format(
             self.filename, self.file_path, self.file_type, len(self.data))
 
@@ -98,5 +97,5 @@ class BaseResult:
         for k in self.output_files:
             self.output_files[k].write_to_file(folder_path)
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return 'canceled: {}, output_files: {}'.format(self.canceled, self.output_files)

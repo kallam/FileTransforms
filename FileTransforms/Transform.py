@@ -2,13 +2,14 @@ import logging
 import os
 import time
 from typing import List, Dict, Iterable, Callable, Union, Any
-from .header_utils import load_headers, normalize_header, generate_header_lookup_dict, try_header_variations, \
-    enumerate_headers
+from difflib import get_close_matches
+from .header_utils import load_headers, generate_header_lookup_dict, enumerate_headers
 from .FileType import FileType
 from .Result import BaseResult
 from .csv_utils import read_csv
 from .ColumnMod import ColumnMod
-from .TextImporter import TextImporter
+from .FixedWidthTextParser import FixedWidthTextParser
+from .Exceptions import ProcessingFunctionReturnError
 
 
 class BaseTransform:
@@ -94,8 +95,6 @@ class BaseTransform:
             return self.headers.index(header)
         except ValueError:
             return -1
-        except AttributeError:
-            return -1
 
     def get_header_indices(self, headers: Iterable[str]) -> Dict[str, Union[int, None]]:
         indices = {}
@@ -105,11 +104,11 @@ class BaseTransform:
 
         return indices
 
-    def get_output_file_path(self, file_path):
+    def get_output_file_path(self, file_path=None):
         if file_path is not None:
-            return '{}/{}'.format(os.path.dirname(file_path), self.output_name)
+            return os.path.join(os.path.dirname(file_path), self.output_name)
         else:
-            new_file_path = '~/Desktop/' + self.output_name
+            new_file_path = os.path.join('~/Desktop', self.output_name)
             self.logger.info('No file path was given, so the output file is at {}'.format(new_file_path))
 
         return new_file_path
@@ -123,17 +122,21 @@ class BaseTransform:
 
     @staticmethod
     def normalize_header(header):
-        return header.upper()
+        while '  ' in header:
+            header = header.replace('  ', ' ')
+        return header.upper().strip()
 
     def parse_headers(self) -> (List[str]):
         m = {}
 
-        if self.headers is None or not self.headers:
+        if not self.headers:
             return self.headers
 
         # Standardize format of all keys in dictionary
-        header_map = {normalize_header(k) if isinstance(k, str) else k: normalize_header(v) if isinstance(v, str) else v
-                      for k, v in self.header_map.items()}
+        header_map = {
+            self.normalize_header(k) if isinstance(k, str) else k: self.normalize_header(v) if isinstance(v, str) else v
+            for k, v in self.header_map.items()
+        }
 
         if self.headers_file_path:
             data = load_headers(self.headers_file_path)
@@ -144,13 +147,59 @@ class BaseTransform:
                         if h not in self.valid_headers:
                             del m[h]
 
-            elif self.logger:
+            elif self.logger:  # pragma: no cover
                 self.logger.error('{} is not a valid headers_filename'.format(self.headers_file_path))
 
-        header_map = {**generate_header_lookup_dict(m),
+        header_map = {**generate_header_lookup_dict(m, self.normalize_header),
                       **header_map}  # override values from file with header_map parameter dictionary
 
         return self._parse_each_header(header_map)
+
+    @staticmethod
+    def _generate_variations(header):
+        return [header]
+
+    def try_header_variations(self, header, header_map, all_headers) -> (bool, str):
+        if not header_map:
+            return False, header
+
+        header = self.normalize_header(header)
+
+        if header in header_map:
+            return True, header_map[header]
+
+        variations = self._generate_variations(header)
+
+        best_k = None
+        best_ratio = 0.0
+
+        for var_header in variations:
+            if var_header in all_headers:
+                return True, var_header
+
+            if var_header in header_map.keys():
+                ret = header_map[var_header]
+                return True, ret
+
+            for k in filter(lambda _k: _k in var_header, header_map.keys()):
+                ratio = len(k) / 1.0 / len(var_header)
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_k = k
+
+        if best_ratio > self.header_ratio_min:
+            ret = header_map[best_k]
+            return True, ret
+
+        # Check for missing/added spaces
+        for var_header in variations:
+            matches = get_close_matches(var_header, header_map.keys(), 1, 0.9)
+            if len(matches) > 0:
+                ret = header_map[matches[0]]
+                self.remove_token_from_headers_map(header_map, ret)
+                return True, ret
+
+        return False, header
 
     def _parse_each_header(self, header_map):
         headers = self.headers[:]
@@ -168,7 +217,7 @@ class BaseTransform:
                 self.remove_token_from_headers_map(header_map, header)
                 continue
             else:
-                found, headers[i] = try_header_variations(header, header_map, all_headers, self.header_ratio_min)
+                found, headers[i] = self.try_header_variations(header, header_map, all_headers)
                 if found:
                     self.remove_token_from_headers_map(header_map, headers[i])
 
@@ -178,7 +227,7 @@ class BaseTransform:
             if headers[i] in self.prefixable_headers:
                 self.column_mods[i] = ColumnMod(prefix=_header + ': ')
 
-            if headers[i] not in all_headers:
+            if headers[i] not in all_headers and self.valid_headers:  # pragma: no cover
                 self.logger.error('{} is not a valid header'.format(headers[i]))
 
         return enumerate_headers(headers, self.enumerable_headers)
@@ -217,9 +266,10 @@ class BaseTransform:
         :param file_path: String path of the input file.
         """
         self.logger.info('read data from: {}'.format(file_path))
-        return self._process_input_data(read_csv(file_path, self.input_delimiter))
+        return self._process_input_data(read_csv(file_path, delimiter=self.input_delimiter))
 
-    def _run_processing_funcs(self, funcs: List[Callable], data: List):
+    @staticmethod
+    def _run_processing_funcs(funcs: List[Callable], data: List):
         """
         Run the sequence of processing functions before writing the data to disk
 
@@ -228,13 +278,12 @@ class BaseTransform:
         """
         if data is None:
             data = []
-            self.logger.warning('_run_processing_funcs: data was None')
 
         processed_input = data[:]
 
         for func in funcs:
             if processed_input is None:
-                self.logger.error('_run_processing_funcs: processing_func returned None')
+                raise ProcessingFunctionReturnError
             processed_input = func(processed_input)
 
         return processed_input
@@ -301,12 +350,7 @@ class BaseTransform:
             self._run(combined_data, self.get_output_file_path(file_path))
 
         if write_output:
-            folder_path = './'
-            if file_path:
-                folder_path = os.path.dirname(file_path)
-            elif file_paths:
-                folder_path = os.path.dirname(file_paths[0])
-            self.result.write_all(folder_path=folder_path)  # write contents of all output files
+            self.result.write_all()  # write contents of all output files
 
         run_time = time.time() - start
         self.result.execution_time += run_time
@@ -326,6 +370,10 @@ class BaseTransform:
         )
 
         filename = self.output_name if dest_path is None or os.path.isdir(dest_path) else os.path.basename(dest_path)
+        if filename in self.result.output_files:
+            self.result.get_file(filename).data.extend(data)
+            return
+
         output_file = self.result.add_file(filename, headers=self.headers, file_type=self.output_type)
         output_file.data = data
         output_file.output_options = self.output_options
@@ -343,7 +391,7 @@ class BaseTransform:
 
         if self.run_parse_headers and not self.has_parsed_headers:
             self.headers = self.parse_headers()
-            self.has_headers = True
+            self.has_parsed_headers = True
 
         return data
 
@@ -353,9 +401,9 @@ class FixedWidthTransform(BaseTransform):
     Processes files just like BaseTransform but reads fixed-width text files instead of CSVs
     """
 
-    def __init__(self, field_widths: Union[Dict, Iterable] = None, *args, **kwargs):
+    def __init__(self, field_widths: Union[Dict, Iterable], *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ti = TextImporter(field_widths)
+        self.ti = FixedWidthTextParser(field_widths)
         self.has_headers = False
 
     def read_input_file(self, file_path: str):
