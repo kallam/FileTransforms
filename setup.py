@@ -14,7 +14,7 @@ setup(
     license='MIT',
     packages=find_packages(),
     zip_safe=False,
-    install_requires=['csvkit'],
+    install_requires=[],
     extras_require={
         'dev': ['pytest']
     },
