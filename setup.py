@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setup(
     name='FileTransforms',
-    version='0.1',
+    version='0.1.1',
     description='A library for easily transforming files',
     url='http://github.com/kallam/FileTransforms',
     author='Alex Kallam',
     long_description=long_description,
     long_description_content_type="text/markdown",
     license='MIT',
-    packages=find_packages(),
+    packages=find_packages(exclude=['tests']),
     zip_safe=False,
     install_requires=[],
     extras_require={
