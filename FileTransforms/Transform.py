@@ -95,6 +95,8 @@ class BaseTransform:
             return self.headers.index(header)
         except ValueError:
             return -1
+        except AttributeError:
+            return -1
 
     def get_header_indices(self, headers: Iterable[str]) -> Dict[str, Union[int, None]]:
         indices = {}
