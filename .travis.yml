@@ -2,7 +2,7 @@ language: python
 python:
   - "3.6"
 install:
-  - pip install .
-  - pip install pytest
+  - pip install pipenv
+  - pipenv install --dev
 # command to run tests
 script: pytest
