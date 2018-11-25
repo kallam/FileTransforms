@@ -307,14 +307,14 @@ class BaseTransform:
         return self._run_processing_funcs(self.pre_processing_funcs, data)
 
     def run(self, file_path: str = None, file_paths: List[str] = None, data: List = None,
-            dest_path: str = None, write_output: bool = True) -> BaseResult:
+            dest_dir: str = None, write_output: bool = True) -> BaseResult:
         """
         Runs the macro. Uses a combination of preset values and any necessary human input to generate an output file.
 
         :param file_path: String path of the input file. If None, user is prompted to select a file.
         :param file_paths: List of string paths of the input files.
         :param data: Array of pre-processed input data
-        :param dest_path: Output file path
+        :param dest_dir: Destination directory for generated files
         :param write_output: Determine if output file(s) should be written on completion
         """
 
@@ -323,8 +323,8 @@ class BaseTransform:
         if file_paths is None:
             file_paths = []
 
-        if data is not None and (dest_path is not None or not write_output):
-            self._run(self._process_input_data(data), dest_path, write_output)
+        if data is not None and (dest_dir is not None or not write_output):
+            self._run(self._process_input_data(data), dest_dir, write_output)
 
         elif file_path is None and not file_paths:
             return self.result
@@ -352,7 +352,10 @@ class BaseTransform:
             self._run(combined_data, self.get_output_file_path(file_path))
 
         if write_output:
-            self.result.write_all()  # write contents of all output files
+            if not dest_dir and file_paths:
+                dest_dir = os.path.dirname(file_paths[0])
+
+            self.result.write_all(dest_dir)  # write contents of all output files
 
         run_time = time.time() - start
         self.result.execution_time += run_time
@@ -360,29 +363,27 @@ class BaseTransform:
 
         return self.result
 
-    def _run(self, data, dest_path, write_output: bool = True):
+    def _run(self, data, dest_dir, write_output: bool = True):
         """
         Process data and write it to an output file
 
         :param data: Data to be processed and written
-        :param dest_path: Output file path
+        :param dest_dir: Output file path
         """
         data = self._apply_column_mods(
             self.run_processing_funcs(self.process_headers(self.run_pre_processing_funcs(data)))
         )
 
-        filename = self.output_name if dest_path is None or os.path.isdir(dest_path) else os.path.basename(dest_path)
-        if filename in self.result.output_files:
-            self.result.get_file(filename).data.extend(data)
+        if self.output_name in self.result.output_files:
+            self.result.get_file(self.output_name).data.extend(data)
             return
 
-        output_file = self.result.add_file(filename, headers=self.headers, file_type=self.output_type)
+        output_file = self.result.add_file(self.output_name, headers=self.headers, file_type=self.output_type)
         output_file.data = data
         output_file.output_options = self.output_options
 
         if write_output:
-            output_file.file_path = dest_path if dest_path is None or not os.path.isdir(dest_path) else os.path.join(
-                dest_path, self.output_name)
+            output_file.file_path = dest_dir if dest_dir is None else self.get_output_file_path(dest_dir)
 
     def process_headers(self, data):
         if self.has_headers:

@@ -93,7 +93,9 @@ class BaseResult:
     def get_file(self, name: str) -> BaseOutputFile:
         return self.output_files[name]
 
-    def write_all(self, folder_path: str = './'):
+    def write_all(self, folder_path: str = None):
+        if not folder_path:
+            folder_path = './'
         for k in self.output_files:
             self.output_files[k].write_to_file(folder_path)
 
