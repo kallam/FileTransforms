@@ -5,6 +5,12 @@ import csv
 from .FileType import FileType
 from .csv_utils import write_csv
 
+try:
+    # noinspection PyUnresolvedReferences
+    import pandas as pd
+except ModuleNotFoundError:
+    pass
+
 
 class BaseOutputFile:
 
@@ -14,6 +20,7 @@ class BaseOutputFile:
         self.data = []
         self.headers = None
         self.file_path: str = ''
+        self.sheet_name = 'Sheet 1'
         self.output_options: Dict = {
             'delimiter': ',',
             'quotechar': '"',
@@ -22,6 +29,7 @@ class BaseOutputFile:
         self.write_methods = {
             FileType.CSV: self._write_csv,
             FileType.TEXT: self._write_text,
+            FileType.XLSX: self._write_xlsx,
         }
 
     def add_row(self, r):
@@ -37,6 +45,15 @@ class BaseOutputFile:
         with open(self.file_path, 'w') as f:
             for r in self.data:
                 f.write(str(r) + '\n')
+
+    def _write_xlsx(self):
+        if self.headers is None:
+            self.headers = self.data.pop(0)
+
+        df = pd.DataFrame(self.data, columns=self.headers)
+        writer = pd.ExcelWriter(self.file_path)
+        df.to_excel(writer, index=False, sheet_name=self.sheet_name)
+        writer.save()
 
     def write_to_file(self, folder_path: str = './') -> bool:
         if self.file_path == '':

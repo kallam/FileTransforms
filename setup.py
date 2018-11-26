@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='FileTransforms',
-    version='0.1.2',
+    version='0.2.0',
     description='A library for easily transforming files',
     url='http://github.com/kallam/FileTransforms',
     author='Alex Kallam',
@@ -16,7 +16,8 @@ setup(
     zip_safe=False,
     install_requires=[],
     extras_require={
-        'dev': ['pytest']
+        'dev': ['pytest'],
+        'xlsx': ['pandas'],
     },
     classifiers=[
         "Programming Language :: Python :: 3",
