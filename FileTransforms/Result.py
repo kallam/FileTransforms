@@ -6,7 +6,6 @@ from .FileType import FileType
 from .csv_utils import write_csv
 
 try:
-    # noinspection PyUnresolvedReferences
     import pandas as pd
 except ModuleNotFoundError:
     pass

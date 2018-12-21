@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='FileTransforms',
-    version='0.2.0',
+    version='0.2.1',
     description='A library for easily transforming files',
     url='http://github.com/kallam/FileTransforms',
     author='Alex Kallam',
