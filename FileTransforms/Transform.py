@@ -324,7 +324,7 @@ class BaseTransform:
             file_paths = []
 
         if data is not None and (dest_dir is not None or not write_output):
-            self._run(self._process_input_data(data), dest_dir, write_output)
+            self._run(self._process_input_data(data), write_output)
 
         elif file_path is None and not file_paths:
             return self.result
@@ -346,10 +346,10 @@ class BaseTransform:
 
                 combined_data.extend(input_data)
             else:
-                self._run(input_data, self.get_output_file_path(file_path))
+                self._run(input_data, dest_dir)
 
         if self.combine_inputs and data is None:
-            self._run(combined_data, self.get_output_file_path(file_path))
+            self._run(combined_data, dest_dir)
 
         if write_output:
             if not dest_dir and file_paths:
@@ -383,7 +383,13 @@ class BaseTransform:
         output_file.output_options = self.output_options
 
         if write_output:
-            output_file.file_path = dest_dir if dest_dir is None else self.get_output_file_path(dest_dir)
+            if dest_dir is None:
+                dest_dir = self.get_output_file_path(self.current_file_path)
+
+            elif os.path.isdir(dest_dir):
+                dest_dir = os.path.join(dest_dir, self.output_name)
+
+            output_file.file_path = dest_dir
 
     def process_headers(self, data):
         if self.has_headers:
