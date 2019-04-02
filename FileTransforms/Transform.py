@@ -324,7 +324,7 @@ class BaseTransform:
             file_paths = []
 
         if data is not None and (dest_dir is not None or not write_output):
-            self._run(self._process_input_data(data), write_output)
+            self._run(self._process_input_data(data), dest_dir, write_output)
 
         elif file_path is None and not file_paths:
             return self.result
