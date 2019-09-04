@@ -46,12 +46,9 @@ class BaseOutputFile:
                 f.write(str(r) + '\n')
 
     def _write_xlsx(self):
-        if self.headers is None:
-            self.headers = self.data.pop(0)
-
         df = pd.DataFrame(self.data, columns=self.headers)
         writer = pd.ExcelWriter(self.file_path)
-        df.to_excel(writer, index=False, sheet_name=self.sheet_name)
+        df.to_excel(writer, index=False, sheet_name=self.sheet_name, header=bool(self.headers))
         writer.save()
 
     def write_to_file(self, folder_path: str = './') -> bool:
