@@ -7,7 +7,7 @@ class FixedWidthTextParser:
     Imports a fixed width file
     """
 
-    def __init__(self, field_widths, as_dict=False):
+    def __init__(self, field_widths, as_dict=False, raise_errors=True):
         """
         Set the initial field widths values. Negative values indicate that section should be skipped.
 
@@ -15,6 +15,7 @@ class FixedWidthTextParser:
         """
         self.parse_func: Callable = None
         self.parse_dict: Dict[str, Callable] = {}
+        self.raise_errors = raise_errors
 
         if isinstance(field_widths, dict):
             as_dict = True
@@ -88,6 +89,8 @@ class FixedWidthTextParser:
                     break
 
             if key is None:
+                if self.raise_errors:
+                    raise ValueError('Row data does not match any keys')
                 return []
 
             if len(s) >= self.field_widths_length[key]:
